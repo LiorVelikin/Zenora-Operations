@@ -228,7 +228,7 @@ export function applyShopifyOrders(shopifyOrders, source, { manual = false, sync
         const lines = linesFromOrder(so, s.productDefaults);
         lines.forEach((l) => {
           const id = l.id + round;
-          s.lines[id] = { ...l, id, status: 'new', statusAt: now(), price: null, poId: null, serNo: null, supplierNote: '', reorder: o.shopifyState === 'fulfilled' };
+          s.lines[id] = { ...l, id, status: l.alreadySent && !round ? 'done' : 'new', statusAt: now(), price: null, poId: null, serNo: null, supplierNote: '', reorder: o.shopifyState === 'fulfilled' };
         });
         summary.newOrders++; summary.newLines += lines.length; summary.added.push(o.name);
         log(s, o.id, round ? 'Pulled again manually (re-order)' : 'Pulled manually from Shopify');
@@ -242,7 +242,7 @@ export function applyShopifyOrders(shopifyOrders, source, { manual = false, sync
         const lines = linesFromOrder(so, s.productDefaults);
         const status = o.shopifyState === 'open' ? 'new' : o.shopifyState === 'fulfilled' ? 'done' : 'cancelled';
         lines.forEach((l) => {
-          s.lines[l.id] = { ...l, status, statusAt: o.fulfilledAt || o.createdAt, price: null, poId: null, serNo: null, supplierNote: '' };
+          s.lines[l.id] = { ...l, status: l.alreadySent ? 'done' : status, statusAt: o.fulfilledAt || o.createdAt, price: null, poId: null, serNo: null, supplierNote: '' };
         });
         if (o.shopifyState === 'open') {
           summary.newOrders++;

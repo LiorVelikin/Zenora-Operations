@@ -8,7 +8,7 @@ const QUERY = `query($after: String, $q: String) {
       shippingAddress { name phone city address1 address2 }
       customer { displayName defaultPhoneNumber { phoneNumber } }
       fulfillments(first: 3) { createdAt status }
-      lineItems(first: 30) { nodes { id title variantTitle quantity image { url }
+      lineItems(first: 30) { nodes { id title variantTitle quantity unfulfilledQuantity image { url }
         variant { selectedOptions { name value } } product { id handle title } } } }
   }
 }`;

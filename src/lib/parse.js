@@ -205,7 +205,8 @@ export function linesFromOrder(o, productDefaults = {}) {
       image,
       plating,
       platingSource: isGift ? 'order' : plating ? 'title' : null,
-      qty: li.quantity || 1,
+      qty: (li.unfulfilledQuantity > 0 ? li.unfulfilledQuantity : li.quantity) || 1,
+      alreadySent: li.unfulfilledQuantity === 0,
       flags,
     };
 
