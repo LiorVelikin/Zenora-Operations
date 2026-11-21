@@ -3,6 +3,7 @@ import { PLATINGS, platingLabel } from './lib/parse.js';
 import { stageOf } from './lib/status.js';
 import { imageUrl, compressImage } from './lib/platform.js';
 import { updateLine } from './lib/store.js';
+import { t, useLang, setLang } from './lib/i18n.js';
 
 // ---------- icons ----------
 const P = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.6, strokeLinecap: 'round', strokeLinejoin: 'round' };
@@ -69,10 +70,11 @@ export function MetalSelect({ value, onChange }) {
   );
 }
 
-const STAGE_TONE = { new: '', ordered: 'blue', shipped: 'purple', arrived: 'yellow', done: 'green', cancelled: 'red' };
+// New = needs ordering (yellow), on the way (blue/purple), at the studio = ready to pack (green), sent = finished (grey).
+const STAGE_TONE = { new: 'yellow', ordered: 'blue', shipped: 'purple', arrived: 'green', done: '', cancelled: 'red' };
 export function StageBadge({ status }) {
   const s = stageOf(status);
-  return <span className={`badge ${STAGE_TONE[s.id] || ''}`}>{s.short}</span>;
+  return <span className={`badge ${STAGE_TONE[s.id] || ''}`}>{t(s.short)}</span>;
 }
 export function Badge({ tone = '', children }) { return <span className={`badge ${tone}`}>{children}</span>; }
 
@@ -155,8 +157,14 @@ export const useConfirm = () => useContext(ConfirmCtx);
 export const useToast = () => useContext(ToastCtx);
 
 export async function copyText(text, notify) {
-  try { await navigator.clipboard.writeText(text); notify?.('Copied'); }
+  try { await navigator.clipboard.writeText(text); notify?.(t('Copied')); }
   catch { notify?.('Copy blocked here: select the text and copy it manually', 'err'); }
 }
 
 export { platingLabel };
+
+// One tap switches the team screens between English and Russian.
+export function LangButton() {
+  const lang = useLang();
+  return <button type="button" className="lang-btn" onClick={() => setLang(lang === 'ru' ? 'en' : 'ru')} title="Language / Язык">{lang === 'ru' ? 'English' : 'Русский'}</button>;
+}

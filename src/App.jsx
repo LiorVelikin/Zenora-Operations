@@ -4,13 +4,14 @@ import { getKey, setKey, api } from './lib/remote.js';
 import Login from './views/Login.jsx';
 import Settings from './views/Settings.jsx';
 import { IS_PREVIEW } from './lib/platform.js';
-import { Providers, useConfirm, useToast, Icon } from './ui.jsx';
+import { Providers, useConfirm, useToast, Icon, LangButton } from './ui.jsx';
 import Orders from './views/Orders.jsx';
 import { POList, PODetail } from './views/POs.jsx';
 import Prices from './views/Prices.jsx';
 import Supplier from './views/Supplier.jsx';
 import Packing from './views/Packing.jsx';
 import Service from './views/Service.jsx';
+import { t, useLang } from './lib/i18n.js';
 
 // Each person gets one screen. In the live app the login decides the screen;
 // in the preview you switch with the buttons in the top bar.
@@ -35,9 +36,10 @@ const LABEL = { admin: 'Admin', supplier: 'Supplier', packing: 'Packing', servic
 function SyncBadge() {
   useStore();
   if (IS_PREVIEW) return null;
-  const t = sync.status === 'offline' ? 'Offline: retrying…' : sync.status === 'saving' ? 'Saving…' : 'Saved';
-  return <span className={`sync ${sync.status}`} title={sync.error}>{t}</span>;
+  const label = sync.status === 'offline' ? 'Offline: retrying…' : sync.status === 'saving' ? 'Saving…' : 'Saved';
+  return <span className={`sync ${sync.status}`} title={sync.error}>{t(label)}</span>;
 }
+
 
 // Live website: log in with a code (or the supplier's link), then load the shared data.
 function LiveGate() {
@@ -54,12 +56,13 @@ function LiveGate() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   if (phase === 'login') return <Login onIn={enter} error={err} />;
   if (phase === 'error') return <div className="login"><div className="login-card"><div className="login-logo">ZENORA</div><p>Could not load the data: {err}</p><button className="btn primary" onClick={() => location.reload()}>Try again</button></div></div>;
-  if (phase !== 'in') return <div className="login"><div className="login-card"><div className="login-logo">ZENORA</div><p className="muted">Loading…</p></div></div>;
+  if (phase !== 'in') return <div className="login"><div className="login-card"><div className="login-logo">ZENORA</div><p className="muted">{t('Loading…')}</p></div></div>;
   return <Shell liveRole={me.role} supplierKey={me.supplierKey} />;
 }
 
 function Shell({ liveRole = null, supplierKey = '' }) {
   const s = useStore();
+  useLang();
   const ask = useConfirm();
   const notify = useToast();
   const [role, setRoleState] = useState(() => liveRole || load('zenora-ops-role', 'admin'));
@@ -90,8 +93,9 @@ function Shell({ liveRole = null, supplierKey = '' }) {
     </button>
   );
 
+  const showLang = role === 'packing' || role === 'service' || (role === 'admin' && (route.page === 'packing' || route.page === 'service'));
   const switcher = !IS_PREVIEW ? (
-    <><SyncBadge /><span className="who-am-i">{LABEL[role]}</span>{role !== 'supplier' && <button className="link-btn" onClick={logout}>Log out</button>}</>
+    <div className="right-items">{showLang && <LangButton />}<SyncBadge /><span className="who-am-i">{t(LABEL[role])}</span>{role !== 'supplier' && <button className="link-btn" onClick={logout}>{t('Log out')}</button>}</div>
   ) : (
     <>
       <div className="role-switch desktop-only">
@@ -100,6 +104,7 @@ function Shell({ liveRole = null, supplierKey = '' }) {
       <select className="mobile-only role-select" value={role} onChange={(e) => setRole(e.target.value)}>
         {ROLES.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
       </select>
+      {showLang && <LangButton />}
     </>
   );
   const resetBtn = IS_PREVIEW && (
@@ -111,7 +116,7 @@ function Shell({ liveRole = null, supplierKey = '' }) {
     return (
       <div className="simple">
         <header className="topbar">
-          <div className="logo"><b>ZENORA</b><span>{ROLES.find((r) => r.id === role)?.label}</span></div>
+          <div className="logo"><b>ZENORA</b><span>{t(LABEL[role])}</span></div>
           <span className="spacer" />
           {switcher}
         </header>

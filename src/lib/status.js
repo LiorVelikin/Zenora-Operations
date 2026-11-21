@@ -1,3 +1,4 @@
+import { getLang } from './i18n.js';
 // The order chain: 5 simple steps for every item.
 // Price checks and PO confirmation happen on the PO itself, not on the item.
 export const STAGES = [
@@ -23,31 +24,33 @@ export function orderStatus(lines) {
   return { stage, ahead, total: live.length };
 }
 
-// What customer service tells the customer at each step (English for now).
+// What customer service sees (internal, English/Russian via t()) and the reply
+// they copy to the customer (Hebrew: customers are in Israel). Written gender-neutral.
+const hi = (o) => (o.first ? `היי ${o.first}` : 'היי');
 const CS_TEXT = {
   new: {
     internal: 'Order received. Not ordered from the supplier yet.',
-    reply: (o) => `Hi ${o.first}! Thank you for your order ${o.name}. Your order is confirmed and is now being prepared for production. We will update you as soon as it moves to the next stage.`,
+    reply: (o) => `${hi(o)}! תודה על ההזמנה ${o.name} 🤍\nההזמנה התקבלה ונמצאת עכשיו בהכנה לייצור. נעדכן ברגע שהיא תתקדם לשלב הבא.`,
   },
   ordered: {
     internal: 'Ordered from the supplier. In production.',
-    reply: (o) => `Hi ${o.first}! Your order ${o.name} is in production right now. Every piece is made and checked for you, and we will update you as soon as it ships.`,
+    reply: (o) => `${hi(o)}! ההזמנה ${o.name} נמצאת עכשיו בייצור ✨\nכל תכשיט מיוצר ונבדק במיוחד עבורך. נעדכן ברגע שההזמנה יוצאת לדרך.`,
   },
   shipped: {
     internal: 'Finished and on its way to our studio for the final check and packing.',
-    reply: (o) => `Hi ${o.first}! Great news: your jewelry for order ${o.name} is finished and on its way to our studio for a final quality check and gift packing. We will let you know as soon as it ships to you.`,
+    reply: (o) => `${hi(o)}! חדשות טובות 🤍\nהתכשיטים מההזמנה ${o.name} מוכנים ונמצאים בדרך לסטודיו שלנו לבדיקת איכות אחרונה ואריזת מתנה. נעדכן ברגע שההזמנה יוצאת למשלוח.`,
   },
   arrived: {
     internal: 'At our studio, going through the final check and packing.',
-    reply: (o) => `Hi ${o.first}! Your jewelry for order ${o.name} has arrived at our studio and is going through its final quality check and packing. It will ship to you very soon.`,
+    reply: (o) => `${hi(o)}! התכשיטים מההזמנה ${o.name} הגיעו לסטודיו שלנו ✨\nהם עוברים עכשיו בדיקת איכות אחרונה ואריזת מתנה, וההזמנה תצא למשלוח ממש בקרוב.`,
   },
   done: {
     internal: 'Packed and handed over for delivery. The customer gets an SMS from the courier.',
-    reply: (o) => `Hi ${o.first}! Your order ${o.name} is packed and on its way to you. The courier will contact you by SMS with the delivery details. Delivery usually takes 3-7 business days.`,
+    reply: (o) => `${hi(o)}! ההזמנה ${o.name} נארזה ויצאה למשלוח 🚚\nחברת השליחויות תשלח הודעת SMS עם פרטי המסירה. זמן המשלוח הוא בדרך כלל 3-7 ימי עסקים.`,
   },
   cancelled: {
     internal: 'Order cancelled or refunded.',
-    reply: (o) => `Hi ${o.first}, your order ${o.name} was cancelled. If you have any questions, we are happy to help.`,
+    reply: (o) => `${hi(o)}, ההזמנה ${o.name} בוטלה. אם יש שאלות, נשמח לעזור 🤍`,
   },
 };
 export const csText = (stageId) => CS_TEXT[stageId] || CS_TEXT.new;
@@ -61,6 +64,6 @@ export function fmtDate(iso, withTime = false) {
   const d = new Date(iso);
   const opts = { day: 'numeric', month: 'short' };
   if (withTime) Object.assign(opts, { hour: '2-digit', minute: '2-digit' });
-  return d.toLocaleString('en-GB', opts);
+  return d.toLocaleString(getLang() === 'ru' ? 'ru-RU' : 'en-GB', opts);
 }
 export const money = (n) => (n == null || n === '' || isNaN(n) ? '—' : `$${Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 })}`);

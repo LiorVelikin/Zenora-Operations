@@ -43,7 +43,7 @@ export function POList({ nav }) {
                     <tr key={po.id} style={{ cursor: 'pointer' }} onClick={() => nav('po', po.id)}>
                       <td className="strong">{po.number}</td>
                       <td data-label="Created" className="muted">{fmtDate(po.createdAt)}</td>
-                      <td data-label="Status"><POBadge st={poStatus(s, po)} /></td>
+                      <td data-label="Status"><span className="row" style={{ gap: 4 }}><POBadge st={poStatus(s, po)} />{po.paidAt && <Badge tone="green">Paid</Badge>}</span></td>
                       <td data-label="Lines" className="c">{t.count}</td>
                       <td data-label="Orders" className="c">{new Set(linesOfPO(s, po.id).map((l) => l.orderId)).size}</td>
                       <td data-label="Total" className="r strong">{t.priced ? money(t.total) : <span className="faint">—</span>}</td>

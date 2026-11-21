@@ -128,7 +128,7 @@ export default function Orders({ nav }) {
                           <input type="checkbox" checked={lines.every((l) => sel.has(l.id))} onChange={(e) => setSel((p) => { const n = new Set(p); lines.forEach((l) => e.target.checked ? n.add(l.id) : n.delete(l.id)); return n; })} />
                           <span className="gname">{order.name}</span>
                           <span>{order.customer}</span>
-                          {!order.isStock && <span className="faint">{daysSince(order.createdAt)} days ago</span>}
+                          {!order.isStock && (daysSince(order.createdAt) >= 3 ? <Badge tone="red">Waiting {daysSince(order.createdAt)} days</Badge> : <span className="faint">{daysSince(order.createdAt)} days ago</span>)}
                           {order.note && <Badge tone="yellow">Note: {order.note}</Badge>}
                           <span className="spacer" />
                           {!order.isStock && <button className="btn plain sm" onClick={() => setEditOrder(order.id)}>Edit order</button>}

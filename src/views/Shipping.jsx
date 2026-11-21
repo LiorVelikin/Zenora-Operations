@@ -7,6 +7,7 @@ import { Thumb, Badge, useConfirm } from '../ui.jsx';
 export function PackagesList() {
   const s = useStore();
   const ask = useConfirm();
+  const here = (sh) => sh.lineIds.filter((id) => ['arrived', 'done'].includes(s.lines[id]?.status)).length;
   const shipments = Object.values(s.shipments).sort((a, b) => b.shippedAt.localeCompare(a.shippedAt));
   if (!shipments.length) return null;
   return (
@@ -16,9 +17,9 @@ export function PackagesList() {
         <div className="card" key={sh.id}>
           <div className="card-head">
             <h3>{sh.number}</h3>
-            <span className="muted">sent {fmtDate(sh.shippedAt)} · {daysSince(sh.shippedAt)} days ago · {sh.lineIds.length} items{sh.source === 'excel' ? ' · from her Excel' : sh.source === 'supplier' ? ' · from her link' : ''}</span>
+            <span className="muted">{sh.note || `sent ${fmtDate(sh.shippedAt)} · ${daysSince(sh.shippedAt)} days ago`} · {sh.lineIds.length} items{sh.source === 'excel' ? ' · from her Excel' : sh.source === 'supplier' ? ' · from her link' : ''}</span>
             <span className="spacer" />
-            {sh.arrivedAt ? <Badge tone="green">Arrived {fmtDate(sh.arrivedAt)}</Badge> : <Badge tone="purple">On the way</Badge>}
+            {sh.arrivedAt ? <Badge tone="green">Arrived {fmtDate(sh.arrivedAt)}</Badge> : <Badge tone="blue">On the way{here(sh) ? ` · ${here(sh)} of ${sh.lineIds.length} here` : ''}</Badge>}
             <input type="text" style={{ width: 160 }} placeholder="Tracking number" value={sh.tracking || ''} onChange={(e) => setShipmentField(sh.id, { tracking: e.target.value })} />
             <button className="btn plain sm danger" onClick={async () => { if (await ask({ title: `Delete ${sh.number}?`, text: 'Items that haven\'t arrived go back to "being made".', ok: 'Delete', danger: true })) deleteShipment(sh.id); }}>Delete</button>
           </div>

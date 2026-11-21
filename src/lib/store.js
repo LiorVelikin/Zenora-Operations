@@ -485,7 +485,7 @@ export function receiveShipment(shipmentId, receivedIds) {
   mutate((s) => {
     const sh = s.shipments[shipmentId];
     sh.arrivedAt = now();
-    sh.missing = sh.lineIds.filter((x) => !receivedIds.includes(x));
+    sh.missing = sh.lineIds.filter((x) => !receivedIds.includes(x) && s.lines[x]?.status === 'shipped');
     const orders = new Set();
     receivedIds.forEach((x) => { const l = s.lines[x]; if (l.status === 'shipped') { setStatus(s, l, 'arrived'); orders.add(l.orderId); } });
     sh.missing.forEach((x) => { s.lines[x].missingIn = sh.number; log(s, s.lines[x].orderId, `${s.lines[x].item} was missing from ${sh.number}`, 'packing'); });
@@ -494,7 +494,12 @@ export function receiveShipment(shipmentId, receivedIds) {
 }
 
 export function receiveLine(lineId) {
-  mutate((s) => { const l = s.lines[lineId]; delete l.missingIn; setStatus(s, l, 'arrived'); log(s, l.orderId, `${l.item} arrived at studio`, 'packing'); });
+  mutate((s) => {
+    const l = s.lines[lineId]; delete l.missingIn; setStatus(s, l, 'arrived'); log(s, l.orderId, `${l.item} arrived at studio`, 'packing');
+    // Last item of a package marked here → the package counts as arrived.
+    const sh = l.shipmentId && s.shipments[l.shipmentId];
+    if (sh && !sh.arrivedAt && sh.lineIds.every((x) => !s.lines[x] || ['arrived', 'done'].includes(s.lines[x].status))) sh.arrivedAt = now();
+  });
 }
 export function unreceiveLine(lineId) {
   mutate((s) => { const l = s.lines[lineId]; setStatus(s, l, l.shipmentId ? 'shipped' : 'ordered'); });

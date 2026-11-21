@@ -4,7 +4,9 @@ import { useStore, linesOfOrder, deleteOrder } from '../lib/store.js';
 import EditLine from './EditLine.jsx';
 import EditOrder from './EditOrder.jsx';
 import { STAGES, stageIndex, orderStatus, csText, fmtDate, daysSince } from '../lib/status.js';
-import { Thumb, Metal, StageBadge, Empty, useToast, useConfirm, copyText, Icon } from '../ui.jsx';
+import { Thumb, StageBadge, Empty, useToast, useConfirm, copyText, Icon } from '../ui.jsx';
+import { platingLabel } from '../lib/parse.js';
+import { t, tSize } from '../lib/i18n.js';
 
 // Customer service: search → see where the order is → copy the reply.
 export default function Service({ admin = false }) {
@@ -29,20 +31,20 @@ export default function Service({ admin = false }) {
 
   return (
     <div className="page narrow">
-      <div className="hello">Find an order</div>
-      <div className="muted" style={{ marginBottom: 14 }}>Type the order number, the customer's name or phone.</div>
+      <div className="hello">{t('Find an order')}</div>
+      <div className="muted" style={{ marginBottom: 14 }}>{t("Type the order number, the customer's name or phone.")}</div>
       <div style={{ position: 'relative', marginBottom: 16 }}>
-        <input className="cs-search" type="search" autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="e.g. 1496 or 054…" />
+        <input className="cs-search" type="search" autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('e.g. 1496 or 054…')} />
       </div>
       <div className="card">
-        <div className="card-head"><h3>{term ? `${list.length} found` : 'Latest orders'}</h3></div>
-        {!all.length && <Empty title="No orders yet" />}
-        {all.length > 0 && !list.length && <Empty title="No order found">Check the number, or ask Lior.</Empty>}
+        <div className="card-head"><h3>{term ? t('{n} found', { n: list.length }) : t('Latest orders')}</h3></div>
+        {!all.length && <Empty title={t('No orders yet')} />}
+        {all.length > 0 && !list.length && <Empty title={t('No order found')}>{t('Check the number, or ask Lior.')}</Empty>}
         {list.map(({ o, st }) => (
           <div key={o.id} className="result" onClick={() => setOpenId(o.id)}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div className="row" style={{ gap: 8 }}><b style={{ fontSize: 15 }}>{o.name}</b><span>{o.customer}</span></div>
-              <div className="small faint">{fmtDate(o.createdAt)} · {daysSince(o.createdAt)} days ago</div>
+              <div className="small faint">{t('{d} · {days} days ago', { d: fmtDate(o.createdAt), days: daysSince(o.createdAt) })}</div>
             </div>
             <StageBadge status={st.stage.id} />
             <span className="faint">›</span>
@@ -61,7 +63,7 @@ function OrderCard({ o, st, back, admin }) {
   const [editOrder, setEditOrder] = useState(false);
   const lines = linesOfOrder(s, o.id);
   const text = csText(st.stage.id);
-  const first = (o.customer || '').split(' ')[0] || 'there';
+  const first = (o.customer || '').split(' ')[0] || '';
   const reply = text.reply({ first, name: o.name });
   const cur = stageIndex(st.stage.id);
   const days = daysSince(o.createdAt);
@@ -69,38 +71,38 @@ function OrderCard({ o, st, back, admin }) {
 
   return (
     <div className="page narrow">
-      <button className="btn plain" onClick={back} style={{ marginBottom: 10, paddingLeft: 0 }}>{Icon.back} Back to search</button>
+      <button className="btn plain" onClick={back} style={{ marginBottom: 10, paddingLeft: 0 }}>{Icon.back} {t('Back to search')}</button>
       <div className="card">
-        <div className="card-head"><h3 style={{ fontSize: 20 }}>{o.name}</h3><span style={{ fontSize: 15 }}>{o.customer}</span><span className="spacer" /><span className="muted small">ordered {fmtDate(o.createdAt)} · {days} days ago</span></div>
+        <div className="card-head"><h3 style={{ fontSize: 20 }}>{o.name}</h3><span style={{ fontSize: 15 }}>{o.customer}</span><span className="spacer" /><span className="muted small">{t('ordered {d} · {days} days ago', { d: fmtDate(o.createdAt), days })}</span></div>
         <div className="card-pad" style={{ paddingTop: 4 }}>
-          {st.stage.id === 'cancelled' ? <div className="strong">This order was cancelled or refunded.</div> : (
+          {st.stage.id === 'cancelled' ? <div className="strong">{t('This order was cancelled or refunded.')}</div> : (
             <div className="steps">
-              {STAGES.map((t, i) => <div key={t.id} className={`step ${i < cur || st.stage.id === 'done' ? 'done' : ''} ${i === cur && st.stage.id !== 'done' ? 'cur' : ''}`}><span className="b" />{t.short}</div>)}
+              {STAGES.map((x, i) => <div key={x.id} className={`step ${i < cur || st.stage.id === 'done' ? 'done' : ''} ${i === cur && st.stage.id !== 'done' ? 'cur' : ''}`}><span className="b" />{t(x.short)}</div>)}
             </div>
           )}
-          <div style={{ marginTop: 14, fontSize: 14 }}><b>{st.stage.label}.</b> <span className="muted">{text.internal}</span></div>
-          {late && <div className="note-strip" style={{ margin: '12px 0 0' }}>Ordered {days} days ago. Ask Lior before promising a date.</div>}
+          <div style={{ marginTop: 14, fontSize: 14 }}>{t(text.internal)}</div>
+          {late && <div className={`note-strip ${days >= 21 ? 'red' : ''}`} style={{ margin: '12px 0 0' }}>⚠ {t('Ordered {d} days ago. Ask Lior before promising a date.', { d: days })}</div>}
         </div>
       </div>
       <div className="card">
-        <div className="card-head"><h3>Reply to the customer</h3><span className="spacer" /><button className="btn primary" onClick={() => copyText(reply, notify)}>Copy</button></div>
-        <div className="card-pad" style={{ paddingTop: 0 }}><div className="reply">{reply}</div></div>
+        <div className="card-head"><h3>{t('Reply to the customer (Hebrew)')}</h3><span className="spacer" /><button className="btn primary" onClick={() => copyText(reply, notify)}>{t('Copy')}</button></div>
+        <div className="card-pad" style={{ paddingTop: 0 }}><div className="reply" dir="rtl" lang="he">{reply}</div></div>
       </div>
       <div className="card">
-        <div className="card-head"><h3>What they ordered</h3></div>
+        <div className="card-head"><h3>{t('What they ordered')}</h3></div>
         {lines.map((l) => (
           <div className="result" key={l.id} style={{ cursor: 'default' }}>
             <Thumb line={l} />
-            <div style={{ flex: 1, minWidth: 0 }}><b>{l.item}{l.qty > 1 ? ` × ${l.qty}` : ''}</b><div className="small muted"><Metal plating={l.plating} /> · {fullSize(l) || 'one size'}</div></div>
+            <div style={{ flex: 1, minWidth: 0 }}><b>{l.item}{l.qty > 1 ? ` × ${l.qty}` : ''}</b><div className="small muted">{t(platingLabel(l.plating))} · {tSize(fullSize(l)) || t('one size')}</div></div>
             <StageBadge status={l.status} />
-            {admin && <button className="btn plain sm" onClick={() => setEditing(l.id)}>Edit</button>}
+            {admin && <button className="btn plain sm" onClick={() => setEditing(l.id)}>{t('Edit')}</button>}
           </div>
         ))}
       </div>
       {admin && <div className="row" style={{ marginBottom: 12 }}><button className="btn" onClick={() => setEditOrder(true)}>Edit customer details</button><span className="spacer" /><button className="btn plain danger" onClick={async () => { if (await ask({ title: `Delete ${o.name} from the system?`, text: 'All its items are removed here (nothing changes in Shopify). You can add the order again later.', ok: 'Delete order', danger: true })) { deleteOrder(o.id); back(); notify('Order deleted'); } }}>Delete order from system</button></div>}
       {editing && <EditLine lineId={editing} onClose={() => setEditing(null)} />}
       {editOrder && <EditOrder orderId={o.id} onClose={() => setEditOrder(false)} />}
-      <div className="muted small">Phone {o.phone || '—'} · {o.city}{o.note ? ` · Note: ${o.note}` : ''}</div>
+      <div className="muted small">{t('Phone')} {o.phone || '—'} · {o.city}{o.note ? ` · ${t('Note')}: ${o.note}` : ''}</div>
     </div>
   );
 }
