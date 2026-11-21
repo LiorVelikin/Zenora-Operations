@@ -85,6 +85,7 @@ const RU = {
   'ordered {d} days ago': 'заказ {d} дн. назад',
   'Customer note': 'Заметка клиента',
   'GIFT': 'ПОДАРОК',
+  'Removed from {o}': 'Убрано из {o}',
   'Here': 'Здесь',
   'On the way · {p}': 'В пути · {p}',
   'Not ordered yet': 'Ещё не заказано',

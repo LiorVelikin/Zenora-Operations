@@ -151,7 +151,7 @@ function OrderCard({ info, admin, compact }) {
         <div className={`pack-row ${l.status === 'arrived' ? '' : 'not-here'}`} key={l.id}>
           <Thumb line={l} size="xl" />
           <div>
-            <div className="pname">{l.item.replace(' (GIFT)', '')}{l.qty > 1 ? ` × ${l.qty}` : ''} {isGift(l) && <span className="tag gift">{t('GIFT')}</span>}</div>
+            <div className="pname">{l.item.replace(' (GIFT)', '')}{l.qty > 1 ? ` × ${l.qty}` : ''} {isGift(l) && <span className="tag gift">{t('GIFT')}</span>} {l.fromOrder && <span className="tag new">{t('Removed from {o}', { o: l.fromOrder })}</span>}</div>
             <div className="psize">{tSize(fullSize(l)) || t('One size')}</div>
             <div className="pmetal">{t(platingLabel(l.plating))}</div>
             <div className="row" style={{ marginTop: 8 }}>
@@ -164,7 +164,7 @@ function OrderCard({ info, admin, compact }) {
           {!order.isStock && (i === 0 ? <div className="box-tag">{t(u.box)}{u.lines.length > 1 && <small>{t('all {n} pieces together', { n: u.lines.length })}</small>}</div> : <div />)}
         </div>
       )))}
-      {compact && <div className="card-pad small muted">{lines.map((l) => `${l.item.replace(' (GIFT)', ` ${t('(gift)')}`)}${fullSize(l) ? ` ${tSize(fullSize(l))}` : ''}`).join(' · ')}</div>}
+      {compact && <div className="card-pad small muted">{lines.map((l) => `${l.item.replace(' (GIFT)', ` ${t('(gift)')}`)}${fullSize(l) ? ` ${tSize(fullSize(l))}` : ''}${l.fromOrder ? ` (${t('Removed from {o}', { o: l.fromOrder })})` : ''}`).join(' · ')}</div>}
       {group === 'ready' && (
         <>
           <div className="checks">

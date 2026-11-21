@@ -2,7 +2,7 @@
 // Preview: kept in this browser (localStorage). Live version swaps the
 // persistence for a shared database; the actions stay the same.
 import { useSyncExternalStore } from 'react';
-import { linesFromOrder, normalizeOrder, priceKey, boxFor, fullSize, giftPlating } from './parse.js';
+import { linesFromOrder, normalizeOrder, priceKey, boxFor, fullSize, giftPlating, shortId } from './parse.js';
 import { stageIndex } from './status.js';
 import { api, diff, applyRows } from './remote.js';
 
@@ -212,7 +212,7 @@ export function lastPrice(s, line) {
 export function applyShopifyOrders(shopifyOrders, source, { manual = false, syncOnly = false } = {}) {
   return mutate((s) => {
     s.dismissed ||= {};
-    const summary = { newOrders: 0, newLines: 0, fulfilled: 0, cancelled: 0, already: [], skipped: [], added: [] };
+    const summary = { newOrders: 0, newLines: 0, fulfilled: 0, cancelled: 0, already: [], skipped: [], added: [], changes: [] };
     for (const so of shopifyOrders) {
       const o = normalizeOrder(so);
       const existing = s.orders[o.id];
@@ -253,6 +253,7 @@ export function applyShopifyOrders(shopifyOrders, source, { manual = false, sync
       }
 
       // Sync later Shopify changes onto existing lines.
+      if (o.shopifyState === 'open') syncOrderItems(s, so, o, have, summary);
       if (o.shopifyState === 'fulfilled') {
         let changed = false;
         have.forEach((l) => { if (!l.reorder && l.status !== 'done' && l.status !== 'cancelled') { setStatus(s, l, 'done'); changed = true; } });
@@ -268,6 +269,50 @@ export function applyShopifyOrders(shopifyOrders, source, { manual = false, sync
     s.lastPullSource = source;
     return summary;
   });
+}
+
+// Items removed in Shopify (cancelled / exchanged) and items added (the exchange) on an open order.
+function syncOrderItems(s, so, o, have, summary) {
+  const fresh = linesFromOrder(so, s.productDefaults);
+  const freshIds = new Set(fresh.map((l) => l.lineItemId));
+  const freshById = Object.fromEntries(fresh.map((l) => [l.id, l]));
+  const shopifyIds = new Set((so.lineItems?.nodes || []).map((li) => shortId(li.id)));
+  for (const l of have) {
+    if (l.flags?.includes('manual') || l.status === 'done' || l.status === 'cancelled') continue;
+    if (!shopifyIds.has(l.lineItemId) || freshIds.has(l.lineItemId)) {
+      // still in the order: follow a lower quantity (partial refund) while nothing is ordered yet
+      const f = freshById[l.id.replace(/-r\d+$/, '')];
+      if (f && f.qty < l.qty && l.status === 'new') { l.qty = f.qty; summary.changes.push(`${o.name}: ${l.item} quantity now ${f.qty}`); if (l.poId) renumberPO(s, l.poId); }
+      continue;
+    }
+    summary.changes.push(`${o.name}: ${l.item} ${removeFromOrder(s, l, o)}`);
+  }
+  const haveIds = new Set(have.map((l) => l.lineItemId));
+  const added = fresh.filter((l) => !haveIds.has(l.lineItemId) && !l.alreadySent);
+  added.forEach((l) => {
+    s.lines[l.id] = { ...l, status: 'new', statusAt: now(), price: null, poId: null, serNo: null, supplierNote: '' };
+    summary.changes.push(`${o.name}: ${l.item} added (new item to order)`);
+  });
+  if (added.length) { summary.newLines += added.length; log(s, o.id, `${added.length} item(s) added in Shopify`); }
+}
+
+// An item was removed from the customer's order. If nothing was ordered yet it is simply cancelled.
+// If the supplier already has it, it still arrives, so it moves to stock instead of being packed.
+function removeFromOrder(s, l, o) {
+  if (l.status === 'new') {
+    const po = l.poId;
+    l.cancelledFrom = 'new'; l.poId = null; l.serNo = null; l.ref = null;
+    setStatus(s, l, 'cancelled');
+    if (po) renumberPO(s, po);
+    log(s, o.id, `${l.item} removed in Shopify (cancelled or exchanged)`);
+    return 'removed: cancelled';
+  }
+  let stock = Object.values(s.orders).find((x) => x.isStock && x.cancelledStock);
+  if (!stock) stock = s.orders['stock-cancelled'] = { id: 'stock-cancelled', name: 'Stock', createdAt: now(), customer: 'For stock', phone: '', city: '', note: '', shopifyState: 'open', isStock: true, cancelledStock: true };
+  l.fromOrder = o.name; l.orderId = stock.id; l.orderName = stock.name;
+  log(s, o.id, `${l.item} removed in Shopify. Already ordered from the supplier, so it goes to stock when it arrives`);
+  log(s, stock.id, `${l.item} from ${o.name} (removed from that order)`);
+  return 'removed: already ordered, it will go to stock';
 }
 
 // ---------- purchasing (Lior) ----------

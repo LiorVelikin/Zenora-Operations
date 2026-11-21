@@ -64,7 +64,7 @@ export default function Orders({ nav }) {
         out.push('Checked with Shopify');
         if (r.fulfilled) out.push(`${r.fulfilled} marked sent (fulfilled in Shopify)`);
         if (r.cancelled) out.push(`${r.cancelled} cancelled`);
-        setMsg({ tone: 'ok', text: [out.join(' · ')] });
+        setMsg({ tone: r.changes.length ? 'warn' : 'ok', text: [out.join(' · '), ...r.changes] });
       }
     } catch (e) {
       setMsg({ tone: 'warn', text: [describePullError(e)], retry: mode });

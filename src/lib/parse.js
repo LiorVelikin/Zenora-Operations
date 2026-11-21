@@ -20,7 +20,7 @@ export const BOXES = {
 };
 export const BOX_OPTIONS = Object.values(BOXES);
 
-const shortId = (gid) => String(gid || '').split('/').pop();
+export const shortId = (gid) => String(gid || '').split('/').pop();
 
 // --- metal / plating -------------------------------------------------------
 export function platingFromText(text) {
@@ -170,11 +170,14 @@ export function normalizeOrder(o) {
   };
 }
 
+export const isRemovedItem = (li) => li.currentQuantity === 0 && !(li.unfulfilledQuantity > 0);
+
 // Build purchase lines for one order. productDefaults remembers a plating per
 // product when the title has no metal (e.g. "Solitaire Pendant Necklace").
 export function linesFromOrder(o, productDefaults = {}) {
   const orderId = shortId(o.id);
-  const items = o.lineItems?.nodes || [];
+  // Items removed from the order in Shopify (edited, exchanged or refunded) have currentQuantity 0.
+  const items = (o.lineItems?.nodes || []).filter((li) => !isRemovedItem(li));
   const out = [];
 
   const realItems = items.filter((li) => shortId(li.product?.id) !== GIFT_PRODUCT_ID && !/מתנה/.test(li.title));
@@ -205,7 +208,7 @@ export function linesFromOrder(o, productDefaults = {}) {
       image,
       plating,
       platingSource: isGift ? 'order' : plating ? 'title' : null,
-      qty: (li.unfulfilledQuantity > 0 ? li.unfulfilledQuantity : li.quantity) || 1,
+      qty: (li.unfulfilledQuantity > 0 ? li.unfulfilledQuantity : (li.currentQuantity ?? li.quantity)) || 1,
       alreadySent: li.unfulfilledQuantity === 0,
       flags,
     };
