@@ -80,7 +80,9 @@ export function splitCarat(str) {
   return { carat: `${m[1]}ct`, size: text.replace(m[0], '').replace(/\s{2,}/g, ' ').trim() };
 }
 // What the supplier sees in her "size" column, like her sheet: "1ct size6", "2ct 45cm".
-export const fullSize = (l) => [l?.carat, l?.size].filter(Boolean).join(' ');
+// A carat typed as a bare number ("4") is shown as "4ct".
+export const caratText = (c) => (/^\d+(\.\d+)?$/.test(String(c ?? '').trim()) ? `${String(c).trim()}ct` : c || '');
+export const fullSize = (l) => [caratText(l?.carat), l?.size].filter(Boolean).join(' ');
 
 // --- sets --------------------------------------------------------------------
 const opt = (options, re) => options.find((o) => re.test(o.name))?.value || '';

@@ -1,4 +1,4 @@
-import { fullSize } from './parse.js';
+import { fullSize, caratText } from './parse.js';
 import { linesOfPO, poRows } from './store.js';
 import { PLATINGS } from './parse.js';
 import { saveFile, imageAsBase64 } from './platform.js';
@@ -52,7 +52,7 @@ export async function exportPOExcel(s, poId) {
     const n = 4 + i;
     const row = ws.getRow(n);
     const shipped = rowShipped(r);
-    const size = [r.carat, r.size].filter(Boolean).join(' ');
+    const size = [caratText(r.carat), r.size].filter(Boolean).join(' ');
     const item = String(r.item || '').replace(/\s*\(GIFT\)/i, '');
     row.values = [r.serNo, '', item, supplierPlating(r.plating), size, r.qty, r.price ?? null, null, shipped ? rowLastShipDate(s, r) : null, r.supplierNote || '', r.ref];
     row.getCell(8).value = { formula: `IF(G${n}="","",F${n}*G${n})` };
