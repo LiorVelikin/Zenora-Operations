@@ -2,6 +2,29 @@ import { fullSize, caratText } from './parse.js';
 import { linesOfPO, poRows } from './store.js';
 import { PLATINGS } from './parse.js';
 import { saveFile, imageAsBase64 } from './platform.js';
+import { unzipSync, zipSync, strFromU8, strToU8 } from 'fflate';
+
+// ExcelJS writes every photo with a 0×0 size inside the drawing. Excel ignores that and uses the
+// cell corners, but iPhone / WhatsApp previews use it, so the photos look empty there.
+// Write the real position and size of each photo (in EMU) into the file.
+function fixPhotoSizes(bytes, rowsWithPhoto, { colA, colB, top, rowH }) {
+  if (!rowsWithPhoto.length) return bytes;
+  const files = unzipSync(bytes);
+  const name = Object.keys(files).find((f) => /^xl\/drawings\/drawing\d+\.xml$/.test(f));
+  if (!name) return bytes;
+  const px = (w) => Math.trunc(w * 7 + 5); // Excel column width (characters) → pixels
+  const EMU_PX = 9525, EMU_PT = 12700;
+  const topPt = top.reduce((a, b) => a + b, 0);
+  let i = 0;
+  const xml = strFromU8(files[name]).replace(/<a:off x="0" y="0"\/><a:ext cx="0" cy="0"\/>/g, (m) => {
+    const n = rowsWithPhoto[i++];
+    if (n == null) return m;
+    const x = px(colA) * EMU_PX, y = Math.round((topPt + (n - 4) * rowH) * EMU_PT);
+    return `<a:off x="${x}" y="${y}"/><a:ext cx="${px(colB) * EMU_PX}" cy="${Math.round(rowH * EMU_PT)}"/>`;
+  });
+  files[name] = strToU8(xml);
+  return zipSync(files, { level: 6 });
+}
 
 const loadExcel = async () => (await import('exceljs/dist/exceljs.min.js')).default;
 const supplierPlating = (id) => PLATINGS.find((p) => p.id === id)?.supplier || '';
@@ -22,8 +45,8 @@ export async function exportPOExcel(s, poId) {
   const rows = poRows(s, poId);
   const hasNotes = rows.some((r) => r.supplierNote);
   const wb = new ExcelJS.Workbook();
-  wb.creator = 'Zenora';
-  const ws = wb.addWorksheet(po.number, { views: [{ state: 'frozen', ySplit: 3 }] });
+  wb.creator = 'Lior';
+  const ws = wb.addWorksheet(po.number);
   // A Ser No. | B Picture | C Item | D Plating | E Size | F QTY | G Price | H Amount | I Shipped date | J Note | K Code (hidden)
   const head = ['Ser No.', 'Picture', 'Item', 'Plating', 'Size', 'QTY', 'Price (USD)', 'Amount (USD)', 'Shipped date', 'Note', 'Code'];
   ws.columns = [{ width: 8 }, { width: 15 }, { width: 28 }, { width: 10 }, { width: 14 }, { width: 7 }, { width: 12 }, { width: 15 }, { width: 13 }, { width: hasNotes ? 26 : 2 }, { width: 10 }];
@@ -31,7 +54,8 @@ export async function exportPOExcel(s, poId) {
   ws.getColumn(11).hidden = true;
 
   ws.mergeCells('A1:G1');
-  ws.getCell('A1').value = `ZENORA · ${po.number}`;
+  ws.getCell('A1').value = `Lior ${po.number}`;
+  ws.getRow(1).height = 24; ws.getRow(2).height = 8;
   ws.getCell('A1').font = { bold: true, size: 15 };
   ws.getCell('H1').value = new Date(po.sentAt || po.createdAt).toISOString().slice(0, 10).replace(/-/g, '/');
   ws.getCell('H1').font = { bold: true };
@@ -48,6 +72,7 @@ export async function exportPOExcel(s, poId) {
   hr.height = 22;
 
   const images = await Promise.all(rows.map((r) => imageAsBase64(r.first.customImage || r.first.image || r.first.supplierImage, 240)));
+  const placed = []; // [row number] of each photo, in the order they are added
   rows.forEach((r, i) => {
     const n = 4 + i;
     const row = ws.getRow(n);
@@ -71,6 +96,7 @@ export async function exportPOExcel(s, poId) {
       const id = wb.addImage({ base64: images[i].dataUrl, extension: images[i].ext });
       // anchored to the cell's corners: shows in Excel, WPS, Numbers and phone previews
       ws.addImage(id, { tl: { col: 1, row: n - 1 }, br: { col: 2, row: n }, editAs: 'oneCell' });
+      placed.push(n);
     }
   });
   const last = 3 + rows.length;
@@ -86,8 +112,8 @@ export async function exportPOExcel(s, poId) {
     ws.getCell(`H${r}`).numFmt = '"$"0.00';
   });
 
-  const buf = await wb.xlsx.writeBuffer();
-  await saveFile(`Zenora ${po.number}.xlsx`, new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+  const buf = fixPhotoSizes(new Uint8Array(await wb.xlsx.writeBuffer()), placed, { colA: 8, colB: 15, top: [24, 8, 22], rowH: 82 });
+  await saveFile(`Lior ${po.number}.xlsx`, new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
   const got = images.filter((x) => x?.dataUrl).length;
   return { photos: got, total: rows.length, error: images.find((x) => x?.error)?.error || null };
 }

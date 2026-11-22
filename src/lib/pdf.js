@@ -16,7 +16,7 @@ export async function exportPOPdf(s, poId) {
 
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
   doc.setFont('helvetica', 'bold'); doc.setFontSize(18);
-  doc.text(`ZENORA — PURCHASE ORDER ${po.number}`, 40, 46);
+  doc.text(`Lior ${po.number}`, 40, 46);
   doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
   doc.text(`To: ${s.supplierName}`, 40, 64);
   doc.text(`Date: ${new Date(po.sentAt || po.createdAt).toISOString().slice(0, 10)}`, 40, 78);
@@ -56,5 +56,5 @@ export async function exportPOPdf(s, poId) {
   });
 
   const blob = doc.output('blob');
-  return saveFile(`Zenora ${po.number}.pdf`, blob);
+  return saveFile(`Lior ${po.number}.pdf`, blob);
 }
