@@ -1,6 +1,4 @@
 import { fullSize } from './parse.js';
-// Excel in the supplier's own JINGJING layout (columns A–H match her sheet),
-// plus Item / Notes / Zenora ref columns so her filled file can be read back.
 import { linesOfPO, poRows } from './store.js';
 import { PLATINGS } from './parse.js';
 import { saveFile, imageAsBase64 } from './platform.js';
@@ -15,71 +13,76 @@ function rowLastShipDate(s, r) {
   return d ? new Date(d) : null;
 }
 
+// Simple sheet in the supplier's own style: photo, plating, size, quantity, her price.
+// Code (hidden column) lets the system read her filled file back. Gifts look like any other item.
+const PLATING_FILL = { gold: 'FFE9C75F', rose: 'FFF1B9B0' };
 export async function exportPOExcel(s, poId) {
   const ExcelJS = await loadExcel();
   const po = s.pos[poId];
   const rows = poRows(s, poId);
+  const hasNotes = rows.some((r) => r.supplierNote);
   const wb = new ExcelJS.Workbook();
   wb.creator = 'Zenora';
-  const ws = wb.addWorksheet(po.number, { views: [{ state: 'frozen', ySplit: 5 }] });
-  // A Ser | B Picture | C Item | D Plating | E Carat | F Size | G QTY | H Price/pc | I Total | J Shipped date | K Qty shipped | L Notes | M Code
-  ws.columns = [{ width: 7 }, { width: 15 }, { width: 32 }, { width: 10 }, { width: 8 }, { width: 12 }, { width: 7 }, { width: 13 }, { width: 11 }, { width: 13 }, { width: 10 }, { width: 26 }, { width: 13 }];
-  ws.mergeCells('A1:M1');
-  ws.getCell('A1').value = `ZENORA · PURCHASE ORDER ${po.number}`;
-  ws.getCell('A1').font = { bold: true, size: 15 };
-  ws.getCell('A2').value = `To: ${s.supplierName}`;
-  ws.getCell('L2').value = `Date: ${new Date(po.sentAt || po.createdAt).toISOString().slice(0, 10)}`;
-  ws.mergeCells('A3:M3');
-  ws.getCell('A3').value = '1) Write the price for ONE piece in the yellow "Price per piece" column. The total is calculated automatically.';
-  ws.mergeCells('A4:M4');
-  ws.getCell('A4').value = '2) Every time you send a package: write the date in "Shipped date". If you sent only part of the quantity, write how many in "Qty shipped". Do not change anything else.';
-  ['A3', 'A4'].forEach((c) => { ws.getCell(c).font = { italic: true, color: { argb: 'FF8A6100' } }; });
+  const ws = wb.addWorksheet(po.number, { views: [{ state: 'frozen', ySplit: 3 }] });
+  // A Ser No. | B Picture | C Plating | D Size | E QTY | F Price | G Amount | H Shipped date | I Note | J Code (hidden)
+  const head = ['Ser No.', 'Picture', 'Plating', 'Size', 'QTY', 'Price (USD)', 'Amount (USD)', 'Shipped date', 'Note', 'Code'];
+  ws.columns = [{ width: 8 }, { width: 16 }, { width: 10 }, { width: 14 }, { width: 7 }, { width: 12 }, { width: 15 }, { width: 13 }, { width: hasNotes ? 26 : 2 }, { width: 10 }];
+  if (!hasNotes) ws.getColumn(9).hidden = true;
+  ws.getColumn(10).hidden = true;
 
-  const head = ['Ser No.', 'Picture', 'Item', 'Plating', 'Carat', 'Size', 'QTY', 'Price per piece (USD)', 'Total (USD)', 'Shipped date', 'Qty shipped', 'Notes', 'Code'];
-  const hr = ws.getRow(5);
+  ws.mergeCells('A1:F1');
+  ws.getCell('A1').value = `ZENORA · ${po.number}`;
+  ws.getCell('A1').font = { bold: true, size: 15 };
+  ws.getCell('G1').value = new Date(po.sentAt || po.createdAt).toISOString().slice(0, 10).replace(/-/g, '/');
+  ws.getCell('G1').font = { bold: true };
+
+  const thin = { style: 'thin', color: { argb: 'FF9A9A9A' } };
+  const box = { top: thin, left: thin, bottom: thin, right: thin };
+  const hr = ws.getRow(3);
   head.forEach((h, i) => {
     const c = hr.getCell(i + 1);
     c.value = h; c.font = { bold: true };
-    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: [7, 9, 10].includes(i) ? 'FFFFE58A' : 'FFEDEDED' } };
+    c.border = box;
     c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
   });
-  hr.height = 32;
+  hr.height = 22;
 
   const images = await Promise.all(rows.map((r) => imageAsBase64(r.first.customImage || r.first.image || r.first.supplierImage, 240)));
-  const thin = { style: 'thin', color: { argb: 'FFD4D4D4' } };
   rows.forEach((r, i) => {
-    const n = 6 + i;
+    const n = 4 + i;
     const row = ws.getRow(n);
-    const note = [r.isGift ? `FREE GIFT for ${r.orders.length} order${r.orders.length > 1 ? 's' : ''}` : '', r.supplierNote].filter(Boolean).join(' · ');
     const shipped = rowShipped(r);
-    row.values = [r.serNo, '', r.item, supplierPlating(r.plating), r.carat || '', r.size || '', r.qty, r.price ?? null, null, shipped ? rowLastShipDate(s, r) : null, shipped || null, note, r.ref];
-    row.getCell(9).value = { formula: `IF(H${n}="","",G${n}*H${n})` };
-    row.height = images[i] ? 72 : 24;
-    row.eachCell({ includeEmpty: true }, (c, col) => {
-      if (col > 13) return;
-      c.border = { top: thin, left: thin, bottom: thin, right: thin };
-      c.alignment = { vertical: 'middle', horizontal: [3, 12].includes(col) ? 'left' : 'center', wrapText: [3, 12].includes(col) };
-    });
-    row.getCell(7).font = { bold: true, size: r.qty > 1 ? 14 : 11, color: { argb: r.qty > 1 ? 'FFB42318' : 'FF1A1A1A' } };
-    [8, 10, 11].forEach((c) => { row.getCell(c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF6CC' } }; });
-    row.getCell(8).numFmt = '0.00'; row.getCell(9).numFmt = '0.00'; row.getCell(9).font = { bold: true };
-    row.getCell(10).numFmt = 'dd/mm/yyyy';
-    row.getCell(13).font = { color: { argb: 'FF8A8A8A' }, size: 9 };
+    const size = [r.carat, r.size].filter(Boolean).join(' ');
+    row.values = [r.serNo, '', supplierPlating(r.plating), size, r.qty, r.price ?? null, null, shipped ? rowLastShipDate(s, r) : null, r.supplierNote || '', r.ref];
+    row.getCell(7).value = { formula: `IF(F${n}="","",E${n}*F${n})` };
+    row.height = images[i] ? 78 : 24;
+    for (let col = 1; col <= 10; col++) {
+      const c = row.getCell(col);
+      c.border = box;
+      c.alignment = { vertical: 'middle', horizontal: col === 9 ? 'left' : 'center', wrapText: col === 9 };
+    }
+    const fill = PLATING_FILL[r.plating];
+    if (fill) row.getCell(3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fill } };
+    row.getCell(5).font = { bold: true, size: r.qty > 1 ? 14 : 11, color: { argb: r.qty > 1 ? 'FFB42318' : 'FF1A1A1A' } };
+    row.getCell(6).numFmt = '"$"0.00'; row.getCell(7).numFmt = '"$"0.00';
+    row.getCell(8).numFmt = 'yyyy/mm/dd';
     if (images[i]) {
       const id = wb.addImage({ base64: images[i].dataUrl, extension: images[i].ext });
-      ws.addImage(id, { tl: { col: 1.08, row: n - 1 + 0.06 }, ext: { width: 88, height: 88 } });
+      ws.addImage(id, { tl: { col: 1.1, row: n - 1 + 0.08 }, ext: { width: 92, height: 92 } });
     }
   });
-  const last = 5 + rows.length;
+  const last = 3 + rows.length;
   const sumR = last + 1, dhlR = last + 2, totR = last + 3;
-  ws.getCell(`H${sumR}`).value = 'Items';
-  ws.getCell(`I${sumR}`).value = { formula: `SUM(I6:I${last})` };
-  ws.getCell(`H${dhlR}`).value = 'DHL';
-  ws.getCell(`I${dhlR}`).value = po.shipping ?? null;
-  ws.getCell(`I${dhlR}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF6CC' } };
-  ws.getCell(`H${totR}`).value = 'TOTAL';
-  ws.getCell(`I${totR}`).value = { formula: `I${sumR}+I${dhlR}` };
-  [sumR, dhlR, totR].forEach((r) => { ws.getCell(`H${r}`).font = { bold: true }; ws.getCell(`I${r}`).font = { bold: true }; ws.getCell(`I${r}`).numFmt = '0.00'; });
+  ws.getCell(`F${sumR}`).value = 'Items';
+  ws.getCell(`G${sumR}`).value = { formula: `SUM(G4:G${last})` };
+  ws.getCell(`F${dhlR}`).value = 'DHL';
+  ws.getCell(`G${dhlR}`).value = po.shipping ?? null;
+  ws.getCell(`F${totR}`).value = 'TOTAL';
+  ws.getCell(`G${totR}`).value = { formula: `G${sumR}+G${dhlR}` };
+  [sumR, dhlR, totR].forEach((r) => {
+    ['F', 'G'].forEach((c) => { ws.getCell(`${c}${r}`).font = { bold: true }; ws.getCell(`${c}${r}`).border = box; ws.getCell(`${c}${r}`).alignment = { horizontal: 'center' }; });
+    ws.getCell(`G${r}`).numFmt = '"$"0.00';
+  });
 
   const buf = await wb.xlsx.writeBuffer();
   return saveFile(`Zenora ${po.number}.xlsx`, new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));

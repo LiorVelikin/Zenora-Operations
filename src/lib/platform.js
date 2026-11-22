@@ -1,7 +1,7 @@
 // Everything that talks to the outside world lives here, so the live version
 // only has to swap these functions (Shopify API route, real downloads, images).
 import { snapshotAsGraphql } from '../snapshot.js';
-import { api } from './remote.js';
+import { api, getKey } from './remote.js';
 
 const inClaude = () => typeof window !== 'undefined' && window.claude && typeof window.claude.use === 'function';
 export const IS_PREVIEW = typeof window !== 'undefined' && !!window.claude;
@@ -123,7 +123,8 @@ export async function imageAsBase64(url, width = 300) {
   const u = imageUrl(url, width);
   if (!u) return null;
   try {
-    const r = await fetch(u);
+    // Live: go through our server, which is allowed to read Shopify's image CDN.
+    const r = await fetch(`/api/img?u=${encodeURIComponent(u)}`, { headers: { 'x-zenora-key': getKey() } });
     if (!r.ok) return null;
     const blob = await r.blob();
     const dataUrl = await new Promise((res) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(blob); });
