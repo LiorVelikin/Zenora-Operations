@@ -81,7 +81,8 @@ export function PODetail({ poId, nav }) {
     setExporting(kind);
     try {
       const ok = kind === 'xlsx' ? await exportPOExcel(getState(), poId) : await exportPOPdf(getState(), poId);
-      if (ok) notify(`${kind === 'xlsx' ? 'Excel' : 'PDF'} downloaded`);
+      if (ok?.total != null) notify(ok.photos === ok.total ? `Excel downloaded · all ${ok.total} photos` : `Excel downloaded · photos ${ok.photos} of ${ok.total}${ok.error ? ` (${ok.error})` : ''}`, ok.photos === ok.total ? undefined : 'err');
+      else if (ok) notify(`${kind === 'xlsx' ? 'Excel' : 'PDF'} downloaded`);
     } catch (e) { notify(e.message || 'Export failed', 'err'); }
     setExporting('');
   }

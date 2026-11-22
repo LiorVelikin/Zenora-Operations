@@ -121,23 +121,30 @@ export function imageUrl(url, width = 600) {
 export async function imageAsBase64(url, width = 300) {
   if (url && url.startsWith('data:')) return { dataUrl: url, ext: /image\/png/.test(url) ? 'png' : 'jpeg' };
   const u = imageUrl(url, width);
+  if (!url) return { error: 'no photo on this item' };
   if (!u) return null;
-  try {
-    // Live: go through our server, which is allowed to read Shopify's image CDN.
-    const r = await fetch(`/api/img?u=${encodeURIComponent(u)}`, { headers: { 'x-zenora-key': getKey() } });
-    if (!r.ok) return null;
-    const blob = await r.blob();
-    const dataUrl = await new Promise((res) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(blob); });
-    const ext = /png/.test(blob.type) ? 'png' : 'jpeg';
-    // jsPDF/ExcelJS handle png/jpeg; convert others (webp) through a canvas.
-    if (!/png|jpe?g/.test(blob.type)) {
-      const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = dataUrl; });
-      const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight;
-      c.getContext('2d').drawImage(img, 0, 0);
-      return { dataUrl: c.toDataURL('image/jpeg', 0.85), ext: 'jpeg' };
-    }
-    return { dataUrl, ext };
-  } catch { return null; }
+  let error = null;
+  // Live: through our server (allowed to read Shopify's image CDN), then the browser as a fallback.
+  for (const src of [`/api/img?u=${encodeURIComponent(u)}`, u]) {
+    try {
+      const r = await fetch(src, src.startsWith('/api/') ? { headers: { 'x-zenora-key': getKey() } } : {});
+      if (!r.ok) { error = `photo ${r.status}${src.startsWith('/api/') ? ' (server)' : ''}`; continue; }
+      const blob = await r.blob();
+      if (!/^image\//.test(blob.type)) { error = `not an image (${blob.type || 'unknown'})`; continue; }
+      return await toPngOrJpeg(blob);
+    } catch (e) { error = e.message || 'photo failed'; }
+  }
+  return { error };
+}
+
+async function toPngOrJpeg(blob) {
+  const dataUrl = await new Promise((res) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(blob); });
+  if (/png|jpe?g/.test(blob.type)) return { dataUrl, ext: /png/.test(blob.type) ? 'png' : 'jpeg' };
+  // ExcelJS / jsPDF take png or jpeg only: convert webp etc. through a canvas
+  const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('photo could not be read')); i.src = dataUrl; });
+  const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight;
+  const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height); ctx.drawImage(img, 0, 0);
+  return { dataUrl: c.toDataURL('image/jpeg', 0.85), ext: 'jpeg' };
 }
 
 // Shrink an uploaded photo to max 600px JPEG so it stays light.

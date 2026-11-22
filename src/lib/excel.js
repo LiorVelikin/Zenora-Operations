@@ -13,7 +13,7 @@ function rowLastShipDate(s, r) {
   return d ? new Date(d) : null;
 }
 
-// Simple sheet in the supplier's own style: photo, plating, size, quantity, her price.
+// Simple sheet in the supplier's own style: photo, item, plating, size, quantity, her price.
 // Code (hidden column) lets the system read her filled file back. Gifts look like any other item.
 const PLATING_FILL = { gold: 'FFE9C75F', rose: 'FFF1B9B0' };
 export async function exportPOExcel(s, poId) {
@@ -24,17 +24,17 @@ export async function exportPOExcel(s, poId) {
   const wb = new ExcelJS.Workbook();
   wb.creator = 'Zenora';
   const ws = wb.addWorksheet(po.number, { views: [{ state: 'frozen', ySplit: 3 }] });
-  // A Ser No. | B Picture | C Plating | D Size | E QTY | F Price | G Amount | H Shipped date | I Note | J Code (hidden)
-  const head = ['Ser No.', 'Picture', 'Plating', 'Size', 'QTY', 'Price (USD)', 'Amount (USD)', 'Shipped date', 'Note', 'Code'];
-  ws.columns = [{ width: 8 }, { width: 16 }, { width: 10 }, { width: 14 }, { width: 7 }, { width: 12 }, { width: 15 }, { width: 13 }, { width: hasNotes ? 26 : 2 }, { width: 10 }];
-  if (!hasNotes) ws.getColumn(9).hidden = true;
-  ws.getColumn(10).hidden = true;
+  // A Ser No. | B Picture | C Item | D Plating | E Size | F QTY | G Price | H Amount | I Shipped date | J Note | K Code (hidden)
+  const head = ['Ser No.', 'Picture', 'Item', 'Plating', 'Size', 'QTY', 'Price (USD)', 'Amount (USD)', 'Shipped date', 'Note', 'Code'];
+  ws.columns = [{ width: 8 }, { width: 15 }, { width: 28 }, { width: 10 }, { width: 14 }, { width: 7 }, { width: 12 }, { width: 15 }, { width: 13 }, { width: hasNotes ? 26 : 2 }, { width: 10 }];
+  if (!hasNotes) ws.getColumn(10).hidden = true;
+  ws.getColumn(11).hidden = true;
 
-  ws.mergeCells('A1:F1');
+  ws.mergeCells('A1:G1');
   ws.getCell('A1').value = `ZENORA · ${po.number}`;
   ws.getCell('A1').font = { bold: true, size: 15 };
-  ws.getCell('G1').value = new Date(po.sentAt || po.createdAt).toISOString().slice(0, 10).replace(/-/g, '/');
-  ws.getCell('G1').font = { bold: true };
+  ws.getCell('H1').value = new Date(po.sentAt || po.createdAt).toISOString().slice(0, 10).replace(/-/g, '/');
+  ws.getCell('H1').font = { bold: true };
 
   const thin = { style: 'thin', color: { argb: 'FF9A9A9A' } };
   const box = { top: thin, left: thin, bottom: thin, right: thin };
@@ -53,39 +53,43 @@ export async function exportPOExcel(s, poId) {
     const row = ws.getRow(n);
     const shipped = rowShipped(r);
     const size = [r.carat, r.size].filter(Boolean).join(' ');
-    row.values = [r.serNo, '', supplierPlating(r.plating), size, r.qty, r.price ?? null, null, shipped ? rowLastShipDate(s, r) : null, r.supplierNote || '', r.ref];
-    row.getCell(7).value = { formula: `IF(F${n}="","",E${n}*F${n})` };
-    row.height = images[i] ? 78 : 24;
-    for (let col = 1; col <= 10; col++) {
+    const item = String(r.item || '').replace(/\s*\(GIFT\)/i, '');
+    row.values = [r.serNo, '', item, supplierPlating(r.plating), size, r.qty, r.price ?? null, null, shipped ? rowLastShipDate(s, r) : null, r.supplierNote || '', r.ref];
+    row.getCell(8).value = { formula: `IF(G${n}="","",F${n}*G${n})` };
+    row.height = 82;
+    for (let col = 1; col <= 11; col++) {
       const c = row.getCell(col);
       c.border = box;
-      c.alignment = { vertical: 'middle', horizontal: col === 9 ? 'left' : 'center', wrapText: col === 9 };
+      c.alignment = { vertical: 'middle', horizontal: [3, 10].includes(col) ? 'left' : 'center', wrapText: [3, 10].includes(col) };
     }
     const fill = PLATING_FILL[r.plating];
-    if (fill) row.getCell(3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fill } };
-    row.getCell(5).font = { bold: true, size: r.qty > 1 ? 14 : 11, color: { argb: r.qty > 1 ? 'FFB42318' : 'FF1A1A1A' } };
-    row.getCell(6).numFmt = '"$"0.00'; row.getCell(7).numFmt = '"$"0.00';
-    row.getCell(8).numFmt = 'yyyy/mm/dd';
-    if (images[i]) {
+    if (fill) row.getCell(4).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fill } };
+    row.getCell(6).font = { bold: true, size: r.qty > 1 ? 14 : 11, color: { argb: r.qty > 1 ? 'FFB42318' : 'FF1A1A1A' } };
+    row.getCell(7).numFmt = '"$"0.00'; row.getCell(8).numFmt = '"$"0.00';
+    row.getCell(9).numFmt = 'yyyy/mm/dd';
+    if (images[i]?.dataUrl) {
       const id = wb.addImage({ base64: images[i].dataUrl, extension: images[i].ext });
-      ws.addImage(id, { tl: { col: 1.1, row: n - 1 + 0.08 }, ext: { width: 92, height: 92 } });
+      // anchored to the cell's corners: shows in Excel, WPS, Numbers and phone previews
+      ws.addImage(id, { tl: { col: 1, row: n - 1 }, br: { col: 2, row: n }, editAs: 'oneCell' });
     }
   });
   const last = 3 + rows.length;
   const sumR = last + 1, dhlR = last + 2, totR = last + 3;
-  ws.getCell(`F${sumR}`).value = 'Items';
-  ws.getCell(`G${sumR}`).value = { formula: `SUM(G4:G${last})` };
-  ws.getCell(`F${dhlR}`).value = 'DHL';
-  ws.getCell(`G${dhlR}`).value = po.shipping ?? null;
-  ws.getCell(`F${totR}`).value = 'TOTAL';
-  ws.getCell(`G${totR}`).value = { formula: `G${sumR}+G${dhlR}` };
+  ws.getCell(`G${sumR}`).value = 'Items';
+  ws.getCell(`H${sumR}`).value = { formula: `SUM(H4:H${last})` };
+  ws.getCell(`G${dhlR}`).value = 'DHL';
+  ws.getCell(`H${dhlR}`).value = po.shipping ?? null;
+  ws.getCell(`G${totR}`).value = 'TOTAL';
+  ws.getCell(`H${totR}`).value = { formula: `H${sumR}+H${dhlR}` };
   [sumR, dhlR, totR].forEach((r) => {
-    ['F', 'G'].forEach((c) => { ws.getCell(`${c}${r}`).font = { bold: true }; ws.getCell(`${c}${r}`).border = box; ws.getCell(`${c}${r}`).alignment = { horizontal: 'center' }; });
-    ws.getCell(`G${r}`).numFmt = '"$"0.00';
+    ['G', 'H'].forEach((c) => { ws.getCell(`${c}${r}`).font = { bold: true }; ws.getCell(`${c}${r}`).border = box; ws.getCell(`${c}${r}`).alignment = { horizontal: 'center' }; });
+    ws.getCell(`H${r}`).numFmt = '"$"0.00';
   });
 
   const buf = await wb.xlsx.writeBuffer();
-  return saveFile(`Zenora ${po.number}.xlsx`, new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+  await saveFile(`Zenora ${po.number}.xlsx`, new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+  const got = images.filter((x) => x?.dataUrl).length;
+  return { photos: got, total: rows.length, error: images.find((x) => x?.error)?.error || null };
 }
 
 // "21/11", "21.11.2026", "2026-11-21", Excel date → 'YYYY-MM-DD'
@@ -249,12 +253,12 @@ export async function exportOpenItemsExcel(s, rows) {
     const n = 5 + i;
     const row = ws.getRow(n);
     row.values = [r.po, r.serNo, '', `${r.item}${r.remake ? '  (REMAKE)' : ''}${r.isGift ? '  (free gift)' : ''}`, supplierPlating(r.plating), r.carat || '', r.size || '', r.qty, null, null, r.ref];
-    row.height = images[i] ? 72 : 24;
+    row.height = images[i]?.dataUrl ? 72 : 24;
     row.eachCell({ includeEmpty: true }, (c, col) => { if (col > 11) return; c.border = { top: thin, left: thin, bottom: thin, right: thin }; c.alignment = { vertical: 'middle', horizontal: col === 4 ? 'left' : 'center', wrapText: col === 4 }; });
     row.getCell(8).font = { bold: true, size: r.qty > 1 ? 14 : 11, color: { argb: r.qty > 1 ? 'FFB42318' : 'FF1A1A1A' } };
     [9, 10].forEach((c) => { row.getCell(c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF6CC' } }; });
     row.getCell(11).font = { color: { argb: 'FF8A8A8A' }, size: 9 };
-    if (images[i]) { const id = wb.addImage({ base64: images[i].dataUrl, extension: images[i].ext }); ws.addImage(id, { tl: { col: 2.08, row: n - 1 + 0.06 }, ext: { width: 88, height: 88 } }); }
+    if (images[i]?.dataUrl) { const id = wb.addImage({ base64: images[i].dataUrl, extension: images[i].ext }); ws.addImage(id, { tl: { col: 2.08, row: n - 1 + 0.06 }, ext: { width: 88, height: 88 } }); }
   });
   const buf = await wb.xlsx.writeBuffer();
   return saveFile(`Zenora items to ship ${new Date().toISOString().slice(0, 10)}.xlsx`, new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));

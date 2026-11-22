@@ -12,7 +12,7 @@ export async function exportPOPdf(s, poId) {
   const lines = poRows(s, poId);
   const t = poTotals(s, poId);
   const images = await Promise.all(lines.map((l) => imageAsBase64(l.first.customImage || l.first.image || l.first.supplierImage, 200)));
-  const hasImg = images.some(Boolean);
+  const hasImg = images.some((x) => x?.dataUrl);
 
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
   doc.setFont('helvetica', 'bold'); doc.setFontSize(18);
@@ -26,8 +26,8 @@ export async function exportPOPdf(s, poId) {
 
   const pic = hasImg ? [''] : [];
   const body = lines.map((l) => [
-    l.serNo, ...pic, l.item, 'silver', supplierPlating(l.plating), fullSize(l), l.qty,
-    usd(l.price), l.price != null ? usd(l.price * l.qty) : '', [l.isGift ? `FREE GIFT for ${l.orders.length} orders` : '', l.supplierNote].filter(Boolean).join(' · '),
+    l.serNo, ...pic, String(l.item || '').replace(/\s*\(GIFT\)/i, ''), 'silver', supplierPlating(l.plating), fullSize(l), l.qty,
+    usd(l.price), l.price != null ? usd(l.price * l.qty) : '', l.supplierNote || '',
   ]);
   const pad = ['', ...pic, '', '', '', '', ''];
   body.push([...pad, 'Subtotal', t.priced ? usd(t.sub) : '', '']);
@@ -50,7 +50,7 @@ export async function exportPOPdf(s, poId) {
     didDrawCell: (d) => {
       if (hasImg && d.section === 'body' && d.column.index === 1 && d.row.index < lines.length) {
         const img = images[d.row.index];
-        if (img) doc.addImage(img.dataUrl, img.ext.toUpperCase(), d.cell.x + 3, d.cell.y + 3, 52, 52);
+        if (img?.dataUrl) doc.addImage(img.dataUrl, img.ext.toUpperCase(), d.cell.x + 3, d.cell.y + 3, 52, 52);
       }
     },
   });
